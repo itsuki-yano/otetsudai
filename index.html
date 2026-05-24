@@ -7,6 +7,7 @@
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:sans-serif;background:#fdf6ec;color:#2d2d2d;font-size:15px}
+button{cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 header{background:linear-gradient(135deg,#f4845f,#f9c74f 50%,#90be6d);padding:20px 24px}
 header h1{color:#fff;font-size:1.4rem;font-weight:bold}
 header p{color:rgba(255,255,255,0.85);font-size:0.85rem;margin-top:4px}
@@ -52,9 +53,9 @@ input:focus,select:focus{border-color:#f4845f}
 .badge.ryo{background:#d4f5eb;color:#1a6b4e}
 .badge.rin{background:#ede0ff;color:#6020a0}
 .empty-msg{text-align:center;padding:24px;color:#888;font-size:0.85rem}
-.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:100;align-items:center;justify-content:center}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:100;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent}
 .overlay.open{display:flex}
-.modal{background:#fff;border-radius:14px;padding:22px;width:min(460px,94vw);box-shadow:0 12px 40px rgba(0,0,0,0.2)}
+.modal{background:#fff;border-radius:14px;padding:22px;width:min(460px,94vw);box-shadow:0 12px 40px rgba(0,0,0,0.2);-webkit-tap-highlight-color:transparent}
 .modal-title{font-weight:bold;font-size:1rem;margin-bottom:14px}
 .entry-row{display:grid;grid-template-columns:1fr 1fr auto;gap:6px;align-items:center;margin-bottom:6px}
 .modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
@@ -182,10 +183,10 @@ input:focus,select:focus{border-color:#f4845f}
   <div class="modal">
     <div class="modal-title" id="modalTitle">お手伝い入力</div>
     <div id="modalEntries"></div>
-    <button class="btn btn-add btn-sm" style="margin-top:6px" id="btnAddEntry">＋ 追加</button>
+    <button type="button" class="btn btn-add btn-sm" style="margin-top:6px" id="btnAddEntry">＋ 追加</button>
     <div class="modal-footer">
-      <button class="btn btn-cancel" id="btnCloseModal">キャンセル</button>
-      <button class="btn btn-save" id="btnSaveModal">💾 保存</button>
+      <button type="button" class="btn btn-cancel" id="btnCloseModal">キャンセル</button>
+      <button type="button" class="btn btn-save" id="btnSaveModal">💾 保存</button>
     </div>
   </div>
 </div>
@@ -351,7 +352,10 @@ function renderCalendar() {
         cell.appendChild(chip);
       }
     }
-    (function(dateStr){ cell.addEventListener('click',function(){ openModal(dateStr); }); })(ds);
+    (function(dateStr){
+      cell.addEventListener('click',function(){ openModal(dateStr); });
+      cell.addEventListener('touchend',function(e){ e.preventDefault(); openModal(dateStr); });
+    })(ds);
     grid.appendChild(cell);
   }
   wrap.appendChild(grid);
@@ -399,7 +403,7 @@ function renderEntries() {
         if(t.id===e.taskId) op.selected=true; s2.appendChild(op);
       }
       s2.addEventListener('change',function(){ modalTmp[idx].taskId=parseInt(this.value); });
-      var b=document.createElement('button'); b.className='btn btn-del'; b.textContent='✕';
+      var b=document.createElement('button'); b.type='button'; b.className='btn btn-del'; b.textContent='✕';
       b.addEventListener('click',(function(i2){return function(){modalTmp.splice(i2,1);renderEntries();};})(idx));
       row.appendChild(s1); row.appendChild(s2); row.appendChild(b);
       wrap.appendChild(row);
@@ -519,7 +523,18 @@ function renderSettle() {
         '<span style="font-size:.75rem;color:#888">'+s.recordIds.length+'件</span>'+
         '<span class="hist-amt">\xa5'+s.amount.toLocaleString()+'</span>';
       var b=document.createElement('button'); b.className='btn btn-del'; b.textContent='✕';
-      b.addEventListener('click',(function(id){return function(){delSettle(id);};})(s.id));
+      b.setAttribute('data-confirm','0');
+      b.addEventListener('click',(function(id,btn){return function(){
+        if(btn.getAttribute('data-confirm')==='1'){
+          delSettle(id);
+        } else {
+          btn.textContent='確認';
+          btn.style.background='#f4845f';
+          btn.style.color='#fff';
+          btn.setAttribute('data-confirm','1');
+          setTimeout(function(){ btn.textContent='✕'; btn.style.background=''; btn.style.color=''; btn.setAttribute('data-confirm','0'); },3000);
+        }
+      };})(s.id,b));
       row.appendChild(b); hEl.appendChild(row);
     })(hist[i]);
   }
@@ -538,12 +553,11 @@ function undoSettle(child) {
   var last=null;
   for(var i=0;i<ST.settlements.length;i++) if(ST.settlements[i].child===child&&(!last||ST.settlements[i].date>last.date)) last=ST.settlements[i];
   if(!last) return;
-  if(!confirm(child+'の直近の清算('+last.amount+'円)を取り消しますか？')) return;
+
   var s2=[]; for(var i=0;i<ST.settlements.length;i++) if(ST.settlements[i].id!==last.id) s2.push(ST.settlements[i]);
   ST.settlements=s2; sv(); renderSettle(); renderSummary();
 }
 function delSettle(id) {
-  if(!confirm('この清算履歴を削除しますか？')) return;
   var s2=[]; for(var i=0;i<ST.settlements.length;i++) if(ST.settlements[i].id!==id) s2.push(ST.settlements[i]);
   ST.settlements=s2; sv(); renderSettle(); renderSummary();
 }
@@ -640,16 +654,22 @@ document.getElementById('mulRyo').addEventListener('input', function(){ setMul('
 document.getElementById('mulRin').addEventListener('input', function(){ setMul('凜','mbRin',this.value); });
 
 // ボタンイベント
-document.getElementById('btnAddTask').addEventListener('click', addTask);
-document.getElementById('btnPrevMonth').addEventListener('click', function(){ changeMonth(-1); });
-document.getElementById('btnNextMonth').addEventListener('click', function(){ changeMonth(1); });
-document.getElementById('btnExportCSV').addEventListener('click', exportCSV);
-document.getElementById('btnImportCSV').addEventListener('click', function(){ document.getElementById('csvIn').click(); });
-document.getElementById('btnExportJSON').addEventListener('click', exportJSON);
-document.getElementById('btnImportJSON').addEventListener('click', function(){ document.getElementById('jsonIn').click(); });
-document.getElementById('btnAddEntry').addEventListener('click', addEntry);
-document.getElementById('btnCloseModal').addEventListener('click', closeModal);
-document.getElementById('btnSaveModal').addEventListener('click', saveModal);
+bindBtn('btnAddTask', addTask);
+bindBtn('btnPrevMonth', function(){ changeMonth(-1); });
+bindBtn('btnNextMonth', function(){ changeMonth(1); });
+bindBtn('btnExportCSV', exportCSV);
+bindBtn('btnImportCSV', function(){ document.getElementById('csvIn').click(); });
+bindBtn('btnExportJSON', exportJSON);
+bindBtn('btnImportJSON', function(){ document.getElementById('jsonIn').click(); });
+function bindBtn(id, fn) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  el.addEventListener('click', fn);
+  el.addEventListener('touchend', function(e){ e.preventDefault(); fn(); });
+}
+bindBtn('btnAddEntry', addEntry);
+bindBtn('btnCloseModal', closeModal);
+bindBtn('btnSaveModal', saveModal);
 document.getElementById('overlay').addEventListener('click', function(e){ if(e.target===this) closeModal(); });
 document.getElementById('csvIn').addEventListener('change', function(){ importCSV(this); });
 document.getElementById('jsonIn').addEventListener('change', function(){ importJSON(this); });
